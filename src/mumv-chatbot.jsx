@@ -115,7 +115,7 @@ export default function MumVChatbot() {
     // Add an empty assistant message to start streaming into
     setMessages(prev => [...prev, { role: "assistant", content: "" }]);
     try {
-      const apiKey = import.meta.env.VITE_GROQ_KEY;
+      const apiKey = import.meta.env.GROQ_API_KEY;
       const response = await fetch(
         "https://api.groq.com/openai/v1/chat/completions",
         {
