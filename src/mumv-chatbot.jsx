@@ -88,7 +88,12 @@ function renderMarkdown(text) {
     })
     .join("");
 }
-
+const SEARCH_TRIGGERS = [
+  "latest","recent","news","update","today","new","announce",
+  "blog","post","tweet","mirror","article","launch","release",
+  "price","token","airdrop","testnet","mainnet","roadmap",
+  "when","currently","right now","this week","this month"
+];
 export default function MumVChatbot() {
   const [messages, setMessages] = useState([
     {
@@ -106,88 +111,115 @@ export default function MumVChatbot() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text || loading) return;
+const sendMessage = async () => {
+  const text = input.trim();
+  if (!text || loading) return;
 
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+  abortRef.current?.abort();
+  const controller = new AbortController();
+  abortRef.current = controller;
 
-    const history = [...messages, { role: "user", content: text }];
-    setMessages(history);
-    setInput("");
-    if (inputRef.current) inputRef.current.style.height = "46px";
+  const history = [...messages, { role: "user", content: text }];
+  setMessages(history);
+  setInput("");
+  if (inputRef.current) inputRef.current.style.height = "46px";
 
-    setLoading(true);
-    setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+  setLoading(true);
+  setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
-    try {
-      const apiKey = import.meta.env.VITE_GROQ_KEY;
-      const response = await fetch(
-        "https://api.groq.com/openai/v1/chat/completions",
-        {
+  try {
+    // Step 1 — check if query needs live search
+    const needsSearch = SEARCH_TRIGGERS.some(t => text.toLowerCase().includes(t));
+    let searchContext = "";
+
+    if (needsSearch) {
+      try {
+        const searchRes = await fetch("/api/chat", {
           method: "POST",
-          signal: controller.signal,
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
-            max_tokens: 1024,
-            messages: [
-              { role: "system", content: SYSTEM },
-              ...history.map(({ role, content }) => ({ role, content })),
-            ],
-            stream: true,
-          }),
-        }
-      );
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            if (data === "[DONE]") continue;
-            try {
-              const parsed = JSON.parse(data);
-              const delta = parsed.choices?.[0]?.delta?.content;
-              if (delta) {
-                accumulated += delta;
-                setMessages(prev => {
-                  const updated = [...prev];
-                  updated[updated.length - 1].content = accumulated;
-                  return updated;
-                });
-              }
-            } catch (err) {
-              console.error("Parse error:", err);
-            }
-          }
-        }
-      }
-    } catch (err) {
-      if (err.name !== "AbortError") {
-        console.error('API Error:', err);
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1].content = "Something went wrong. Please try again.";
-          return updated;
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: text }),
         });
+        const searchData = await searchRes.json();
+        if (searchData.results) {
+          searchContext = `\n\n## Live Web Search Results\n${searchData.results}`;
+        }
+      } catch (e) {
+        // search failed silently — Groq will still answer from training
       }
     }
-    setLoading(false);
-    inputRef.current?.focus();
-  };
+
+    // Step 2 — call Groq with optional search context injected
+    const systemWithContext = SYSTEM + searchContext;
+    const apiKey = import.meta.env.VITE_GROQ_KEY;
+
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          max_tokens: 1024,
+          messages: [
+            { role: "system", content: systemWithContext },
+            ...history.map(({ role, content }) => ({ role, content })),
+          ],
+          stream: true,
+        }),
+      }
+    );
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let accumulated = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n");
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6);
+          if (data === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              accumulated += delta;
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content: accumulated
+                };
+                return updated;
+              });
+            }
+          } catch (err) {}
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          content: "Something went wrong. Please try again."
+        };
+        return updated;
+      });
+    }
+  }
+
+  setLoading(false);
+  inputRef.current?.focus();
+};
 
   const handleInput = (e) => {
     setInput(e.target.value);
