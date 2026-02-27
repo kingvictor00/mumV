@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+
 const SYSTEM = `You are MumV, Optimum expert. Answer precisely.
 Refer users to official docs if unsure..
 ## About MumV
@@ -69,7 +70,8 @@ Beyond Optimum, you are a broadly knowledgeable assistant covering blockchain, W
 - Be factual and concise. Never hallucinate about Optimum.
 - If unsure about Optimum specifics, direct users to official sources.
 - You have web search — use it for very recent Optimum news.`;
-// ── Markdown renderer (runs once per completed message) ───────────────────────
+
+// ── Markdown renderer ───────────────────────
 function renderMarkdown(text) {
   return text
     .split("\n")
@@ -86,6 +88,7 @@ function renderMarkdown(text) {
     })
     .join("");
 }
+
 export default function MumVChatbot() {
   const [messages, setMessages] = useState([
     {
@@ -98,24 +101,29 @@ export default function MumVChatbot() {
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
   const sendMessage = async () => {
     const text = input.trim();
     if (!text || loading) return;
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+
     const history = [...messages, { role: "user", content: text }];
     setMessages(history);
     setInput("");
     if (inputRef.current) inputRef.current.style.height = "46px";
+
     setLoading(true);
-    // Add an empty assistant message to start streaming into
     setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+
     try {
-      const apiKey = import.meta.env.GROQ_API_KEY;
+      const apiKey = import.meta.env.VITE_GROQ_KEY;
       const response = await fetch(
         "https://api.groq.com/openai/v1/chat/completions",
         {
@@ -180,27 +188,43 @@ export default function MumVChatbot() {
     setLoading(false);
     inputRef.current?.focus();
   };
+
   const handleInput = (e) => {
     setInput(e.target.value);
     e.target.style.height = "auto";
     e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px";
   };
+
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap');
+
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Instrument Sans', sans-serif; background: #080808; }
+
+        html, body {
+          height: 100%;
+          margin: 0;
+          padding: 0;
+          overscroll-behavior: none;           /* Kill page bounce / pull-to-refresh */
+          overscroll-behavior-y: none;
+          background: #080808;
+          font-family: 'Instrument Sans', sans-serif;
+        }
+
         .shell {
           display: flex;
           flex-direction: column;
-          height: 100vh;
+          height: 100dvh;                      /* Use dynamic viewport height for mobile */
+          min-height: 100dvh;
           max-width: 760px;
           margin: 0 auto;
           background: linear-gradient(155deg, #121212 0%, #090909 55%, #121212 100%);
           position: relative;
           overflow: hidden;
+          touch-action: manipulation;          /* Better touch feel */
         }
+
         .shell::before {
           content: '';
           position: absolute;
@@ -212,70 +236,82 @@ export default function MumVChatbot() {
           pointer-events: none;
           z-index: 0;
         }
+
         header {
           position: relative;
           z-index: 10;
-          padding: 26px 24px 18px;
+          padding: 20px 16px 12px;
           text-align: center;
           border-bottom: 1px solid rgba(255,255,255,0.07);
           background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);
           flex-shrink: 0;
         }
+
         .logo {
           font-family: 'DM Serif Display', serif;
-          font-size: 2.1rem;
+          font-size: 2rem;
           letter-spacing: 0.14em;
           background: linear-gradient(130deg, #fff 20%, #777 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
         }
+
         .tagline {
-          margin-top: 5px;
-          font-size: 0.68rem;
-          letter-spacing: 0.2em;
+          margin-top: 4px;
+          font-size: 0.65rem;
+          letter-spacing: 0.18em;
           text-transform: uppercase;
           color: rgba(255,255,255,0.27);
           font-family: 'DM Mono', monospace;
         }
+
         .messages {
           flex: 1;
           overflow-y: auto;
-          padding: 22px 18px 12px;
+          padding: 16px 14px 8px;
           display: flex;
           flex-direction: column;
-          gap: 18px;
+          gap: 16px;
           position: relative;
           z-index: 1;
-          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;   /* Smooth momentum scrolling on iOS */
+          overscroll-behavior-y: contain;      /* Prevent bounce & chaining */
+          overscroll-behavior-x: none;
           scrollbar-width: thin;
           scrollbar-color: rgba(255,255,255,0.07) transparent;
         }
+
         .messages::-webkit-scrollbar { width: 3px; }
         .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
         .row { display: flex; flex-direction: column; }
         .row.user { align-items: flex-end; }
         .row.assistant { align-items: flex-start; }
+
         .lbl {
-          font-size: 0.62rem;
-          letter-spacing: 0.18em;
+          font-size: 0.6rem;
+          letter-spacing: 0.16em;
           text-transform: uppercase;
           font-family: 'DM Mono', monospace;
-          margin-bottom: 5px;
+          margin-bottom: 4px;
           color: rgba(255,255,255,0.22);
         }
+
         .bubble {
-          max-width: 87%;
-          padding: 13px 17px;
+          max-width: 90%;
+          padding: 12px 16px;
           border-radius: 3px;
-          font-size: 0.9rem;
-          line-height: 1.72;
+          font-size: 0.88rem;
+          line-height: 1.65;
           animation: up 0.2s ease both;
         }
+
         @keyframes up {
           from { opacity: 0; transform: translateY(5px); }
           to { opacity: 1; transform: translateY(0); }
         }
+
         .bubble.user {
           background: rgba(255,255,255,0.94);
           color: #0c0c0c;
@@ -283,35 +319,41 @@ export default function MumVChatbot() {
           white-space: pre-wrap;
           word-break: break-word;
         }
+
         .bubble.assistant {
           background: rgba(255,255,255,0.038);
           border: 1px solid rgba(255,255,255,0.075);
           color: rgba(255,255,255,0.86);
           border-top-left-radius: 0;
         }
+
         .bubble.assistant p { margin: 0; }
-        .bubble.assistant p + p { margin-top: 7px; }
+        .bubble.assistant p + p { margin-top: 6px; }
         .bubble.assistant .mdbr { height: 3px; }
-        .bubble.assistant .mdh { font-weight: 600; color: rgba(255,255,255,0.94); margin-top: 9px; font-size: 0.92rem; }
+        .bubble.assistant .mdh { font-weight: 600; color: rgba(255,255,255,0.94); margin-top: 8px; font-size: 0.9rem; }
+
         .bubble strong { color: rgba(255,255,255,0.94); font-weight: 600; }
-        .bubble.user strong{ color: #0c0c0c; }
+        .bubble.user strong { color: #0c0c0c; }
+
         .bubble code {
           font-family: 'DM Mono', monospace;
-          font-size: 0.8rem;
+          font-size: 0.78rem;
           background: rgba(255,255,255,0.07);
-          padding: 1px 5px;
+          padding: 1px 4px;
           border-radius: 2px;
           color: rgba(255,255,255,0.72);
         }
+
         .bubble.user code { background: rgba(0,0,0,0.09); color: #222; }
+
         .bubble a { color: rgba(255,255,255,0.5); text-decoration: underline; text-underline-offset: 3px; }
         .bubble.user a { color: #333; }
-        /* Thinking dots */
+
         .dots {
           display: flex;
           gap: 5px;
           align-items: center;
-          padding: 13px 17px;
+          padding: 12px 16px;
           background: rgba(255,255,255,0.038);
           border: 1px solid rgba(255,255,255,0.075);
           border-top-left-radius: 0;
@@ -319,6 +361,7 @@ export default function MumVChatbot() {
           width: fit-content;
           animation: up 0.2s ease both;
         }
+
         .dot {
           width: 5px; height: 5px;
           background: rgba(255,255,255,0.38);
@@ -327,19 +370,23 @@ export default function MumVChatbot() {
         }
         .dot:nth-child(2) { animation-delay: 0.18s; }
         .dot:nth-child(3) { animation-delay: 0.36s; }
+
         @keyframes throb {
           0%,80%,100% { opacity: 0.28; transform: scale(0.82); }
           40% { opacity: 1; transform: scale(1); }
         }
+
         footer {
           position: relative;
           z-index: 10;
-          padding: 14px 18px 18px;
+          padding: 12px 14px 16px;
           border-top: 1px solid rgba(255,255,255,0.055);
           background: linear-gradient(0deg, rgba(255,255,255,0.025) 0%, transparent 100%);
           flex-shrink: 0;
         }
-        .input-row { display: flex; gap: 9px; align-items: flex-end; }
+
+        .input-row { display: flex; gap: 8px; align-items: flex-end; }
+
         textarea {
           flex: 1;
           background: rgba(255,255,255,0.045);
@@ -347,20 +394,23 @@ export default function MumVChatbot() {
           border-radius: 3px;
           color: rgba(255,255,255,0.88);
           font-family: 'Instrument Sans', sans-serif;
-          font-size: 0.89rem;
+          font-size: 0.88rem;
           line-height: 1.5;
-          padding: 11px 13px;
+          padding: 10px 12px;
           resize: none;
           outline: none;
           min-height: 46px;
           max-height: 136px;
           transition: border-color 0.12s, background 0.12s;
         }
+
         textarea::placeholder { color: rgba(255,255,255,0.18); }
+
         textarea:focus {
           border-color: rgba(255,255,255,0.22);
           background: rgba(255,255,255,0.065);
         }
+
         .send {
           height: 46px; width: 46px;
           flex-shrink: 0;
@@ -373,22 +423,35 @@ export default function MumVChatbot() {
           justify-content: center;
           transition: background 0.12s, transform 0.12s;
         }
+
         .send:hover:not(:disabled) { background: #fff; transform: scale(1.05); }
         .send:disabled { opacity: 0.28; cursor: not-allowed; }
+
         .send svg { width: 17px; height: 17px; color: #0a0a0a; }
+
         .hint {
-          margin-top: 7px;
-          font-size: 0.65rem;
+          margin-top: 6px;
+          font-size: 0.62rem;
           color: rgba(255,255,255,0.17);
           font-family: 'DM Mono', monospace;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.05em;
+          text-align: center;
+        }
+
+        @media (max-width: 480px) {
+          .bubble { max-width: 92%; padding: 11px 14px; font-size: 0.86rem; }
+          header { padding: 16px 12px 10px; }
+          .logo { font-size: 1.9rem; }
+          footer { padding: 10px 12px 14px; }
         }
       `}</style>
+
       <div className="shell">
         <header>
           <div className="logo">MumV</div>
           <div className="tagline">Built by vicTOR (@kingingveek)</div>
         </header>
+
         <div className="messages">
           {messages.map((m, i) => (
             <div key={i} className={`row ${m.role}`}>
@@ -403,6 +466,7 @@ export default function MumVChatbot() {
               )}
             </div>
           ))}
+
           {loading && messages[messages.length - 1].content === "" && (
             <div className="row assistant">
               <div className="lbl">MumV</div>
@@ -411,8 +475,10 @@ export default function MumVChatbot() {
               </div>
             </div>
           )}
+
           <div ref={bottomRef} />
         </div>
+
         <footer>
           <div className="input-row">
             <textarea
@@ -435,7 +501,7 @@ export default function MumVChatbot() {
               </svg>
             </button>
           </div>
-          <div className="hint">Click send button to submit · Enter for new line</div>
+          <div className="hint">Click send · Enter for new line</div>
         </footer>
       </div>
     </>
